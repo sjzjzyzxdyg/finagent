@@ -1,7 +1,7 @@
-# PyFinAgent 应用镜像。数据库(MySQL/pgvector/Redis)由 docker-compose 另起，见 docker-compose.yml。
+# PyFinAgent 应用镜像。数据库(MySQL/Redis)由 docker-compose 另起，见 docker-compose.yml。
 FROM python:3.11-slim
 
-# 依赖构建可能需要的系统库（psycopg2-binary/akshare/trafilatura 等）
+# 依赖构建可能需要的系统库（akshare/trafilatura 等）
 RUN apt-get update && apt-get install -y --no-install-recommends \
         gcc g++ curl \
     && rm -rf /var/lib/apt/lists/*

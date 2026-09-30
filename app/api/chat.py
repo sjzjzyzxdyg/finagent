@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/chat", tags=["chat"], dependencies=[Depends(get_current_user)])
 
-# 只对"教育知识"类回答做语义缓存：这类答案稳定、可复用；
+# 只对"教育知识"类回答做精确匹配缓存：这类答案稳定、可复用；
 # 产品/推荐/测评类答案有时效性或因人而异，不缓存以免返回过期或不匹配的结果。
 _CACHEABLE_AGENTS = {"education_agent"}
 
@@ -238,7 +238,7 @@ async def chat_invoke(req: ChatRequest, user: str = Depends(get_current_user)):
     await repo.save_message(req.session_id, "user", req.query)
     _spawn_capture(user, req.query)   # 被动记录：随口提到的财务信息静默入库
 
-    # 语义缓存：命中直接返回（仅教育类答案会被缓存）
+    # 精确匹配缓存：命中直接返回（仅教育类答案会被缓存）
     hit = await get_cache().aget(req.query)
     if hit:
         await repo.save_message(

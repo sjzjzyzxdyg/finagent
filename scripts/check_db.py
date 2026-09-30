@@ -1,4 +1,4 @@
-"""本机验证业务库真实持久化（会话 / 消息 / 知识文档元数据）。
+"""本机验证业务库真实持久化（会话 / 消息）。
 
 前置：docker compose up -d 已起 MySQL，且 .env 配置：
     MYSQL_DSN=mysql+aiomysql://root:pyfin@localhost:3306/pyfinagent
@@ -28,8 +28,6 @@ async def main() -> None:
         sid, "assistant", "ETF 是像股票一样能在交易所买卖的指数基金……",
         agent_type="education_agent", tokens_used=123,
     )
-    did = await repo.create_knowledge_doc("什么是ETF", category="基金入门", source="demo")
-    await repo.update_knowledge_status(did, 1)
 
     hist = await repo.get_history(sid)
     print(f"\n会话 {sid} 历史 {len(hist)} 条：")
@@ -37,7 +35,7 @@ async def main() -> None:
         print(f"  #{m.id} {m.role:9} agent={m.agent_type} tok={m.tokens_used} | {m.content[:24]}")
 
     async with AsyncSessionLocal() as db:
-        for t in ("chat_session", "chat_message", "knowledge_doc"):
+        for t in ("chat_session", "chat_message"):
             n = (await db.execute(text(f"SELECT count(*) FROM {t}"))).scalar()
             print(f"表 {t}: {n} 行")
 

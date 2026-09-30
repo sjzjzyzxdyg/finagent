@@ -1,5 +1,5 @@
-# 一键拉起 PyFinAgent 全栈：应用 app + 三个数据服务
-#   Postgres+pgvector（向量库）/ MySQL 8（业务库）/ Redis Stack（记忆缓存）
+# 一键拉起 PyFinAgent 全栈：应用 app + 两个数据服务
+#   MySQL 8（业务库）/ Redis Stack（会话记忆 + 缓存）
 # 用法：
 #   cp .env.example .env  然后填好 key    # 首次
 #   docker compose up -d --build          # 构建并启动全栈

@@ -23,6 +23,19 @@ def test_intent_classification():
 
 
 @pytest.mark.asyncio
+async def test_router_routes_assessment_answers():
+    """提交问卷作答（纯选项字母）应路由到测评，而不是被兜底到 education。"""
+    from app.agents.router import is_assessment_answers, router_node
+
+    for ans in ("A B C C B D", "1.A 2.B 3.C 4.D 5.A 6.B", "a、b、c、d、a、b"):
+        assert is_assessment_answers(ans)
+        out = await router_node({"messages": [HumanMessage(content=ans)]})
+        assert out["intent"] == "assessment"
+    for not_ans in ("什么是ETF", "A股最近怎么样", "我想买A类份额", "005273"):
+        assert not is_assessment_answers(not_ans)
+
+
+@pytest.mark.asyncio
 async def test_user_finance_private_store():
     """个人理财资料按用户隔离，可增改，互不可见。"""
     import uuid

@@ -1,6 +1,6 @@
 # 部署指南（让别人也能用）
 
-本项目现已容器化：`docker compose up -d --build` 一条命令起【应用 + MySQL + pgvector + Redis】全栈。
+本项目现已容器化：`docker compose up -d --build` 一条命令起【应用 + MySQL + Redis】全栈。
 
 ---
 
@@ -12,14 +12,15 @@
 cp .env.example .env          # 复制模板
 # 编辑 .env：至少填 OPENAI_API_KEY；要联网搜索再填 WEB_SEARCH_API_KEY(Tavily)
 docker compose up -d --build  # 构建应用镜像并启动全栈
-docker compose ps             # 四个容器都 healthy 即成功
-docker compose logs -f app    # 看应用启动日志（应出现“已导入内置知识…”）
+docker compose ps             # mysql / redis 为 healthy、app 为 running 即成功
+docker compose logs -f app    # 看应用启动日志
+curl http://localhost:8000/health   # 确认 llm_mode=live、redis=true
 ```
 
-打开 http://localhost:8000 使用，http://localhost:8000/admin 管理后台。
+打开 http://localhost:8000 使用，http://localhost:8000/docs 查看接口文档。
 停止：`docker compose down`（保留数据）；清空重来：`docker compose down -v`。
 
-> 说明：容器内 app 用服务名连库（mysql/postgres/redis），已在 compose 里覆盖好，
+> 说明：容器内 app 用服务名连库（mysql/redis），已在 compose 里覆盖好，
 > 不用改 `.env` 里的 localhost 值——那是你不走 Docker、直接 `uvicorn` 时用的。
 
 ---
@@ -72,8 +73,7 @@ server {
 ## 四、给别人用之前的上线清单（按此推进）
 
 - [x] **容器化**：Dockerfile + 全栈 docker-compose（本文件）
-- [ ] **鉴权/多用户**：现在只是单个演示账号(admin/admin123 明文)。上线要接真实用户表 +
-      注册/登录 + 密码 bcrypt，并 `AUTH_ENABLED=true`
+- [x] **鉴权/多用户**：用户表 + 注册/登录 + bcrypt 密码哈希 + JWT；上线时设 `AUTH_ENABLED=true`
 - [x] **密钥模板**：`.env.example`；`.env` 已 gitignore，切勿提交真实 key
 - [ ] **JWT_SECRET** 换强随机；数据库密码别再用默认 `pyfin`
 - [ ] **HTTPS + 域名 + （国内）ICP 备案**：面向公网的网站国内必须备案
@@ -82,5 +82,5 @@ server {
 - [ ] **合规（金融，最关键）**：牌照资质、隐私政策/用户协议、风险揭示、数据安全（等保）——
       建议找合规/法务过一遍
 
-> 数据持久化：MySQL/pgvector/Redis 的数据都在 docker 卷里（pgdata/mysqldata/redisdata），
+> 数据持久化：MySQL/Redis 的数据都在 docker 卷里（mysqldata/redisdata），
 > `down` 不会丢，`down -v` 才会清。上线务必做定期备份。

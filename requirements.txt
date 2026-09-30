@@ -18,19 +18,11 @@ langchain-openai>=0.2.0
 sqlalchemy>=2.0.30
 alembic>=1.13.0
 aiomysql>=0.2.0            # MySQL async driver
-aiosqlite>=0.20.0         # SQLite async driver（零配置默认库）
-asyncpg>=0.29.0           # PostgreSQL async driver（业务库/迁移可用）
-psycopg2-binary>=2.9.9    # PostgreSQL 同步驱动（pgvector 向量库用）
-pgvector>=0.3.0
+aiosqlite>=0.20.0         # SQLite async driver（未配置 MYSQL_DSN 时的默认库）
 
 # ---- Cache / memory ----
 redis>=5.0.0
 langgraph-checkpoint-redis>=0.0.5   # LangGraph Redis checkpointer（会话记忆持久化）
-
-# ---- RAG ----
-pymupdf>=1.24.0           # PDF parsing (import name: fitz)
-rank-bm25>=0.2.2          # sparse lexical search
-# sentence-transformers>=3.0.0   # 可选：本地 embedding/rerank，体积较大，按需安装
 
 # ---- Reliability ----
 tenacity>=8.3.0

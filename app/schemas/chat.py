@@ -23,4 +23,4 @@ class ChatResponse(BaseModel):
     agent_type: str
     sources: list[SourceRef] = Field(default_factory=list)
     tokens_used: int = 0
-    cached: bool = False       # 是否命中语义缓存
+    cached: bool = False       # 是否命中答案缓存

@@ -1,16 +1,21 @@
 """意图路由 Agent（Supervisor）。
 
-面向小白理财平台的五类意图：
-    education  学知识 —— 概念、原理、名词解释（走教育知识库 RAG）
+面向小白理财平台的意图：
+    education  学知识 —— 概念、原理、名词解释（大模型直接作答）
     product    看产品 —— 查询/对比金融产品信息
     recommend  挑产品 —— 个性化配置/推荐（结合风险画像，做适当性）
-    assessment 测风险 —— 风险承受能力测评
+    assessment 测风险 —— 风险承受能力测评（含提交问卷作答）
+    research   联网查最新消息 / 政策 / 公告
+    holding    查我自己持仓的现状 / 收益
+    profile    在对话中更新我的理财资料
     chat       闲聊 / 关于本次对话本身的问题
 
-混合策略：先用关键词快速判断（快、免费、可测），判不出时再用大模型分类；
-离线 mock 模式下兜底走 education。
+混合策略：先用关键词快速判断（快、免费、可测）；判不出时默认走 education，
+开启 ROUTER_LLM_FALLBACK 后改用大模型分类。
 """
 from __future__ import annotations
+
+import re
 
 from app.agents.state import AgentState, last_human
 from app.config import settings
@@ -29,6 +34,16 @@ _HOLDING_STATUS = ["收益", "近况", "现状", "怎么样", "怎样", "表现"
 def has_holding_query(text: str) -> bool:
     """是否在问"我自己持仓的最新收益/现状"（读持仓 → 按代码查实时数据）。"""
     return any(a in text for a in _HOLDING_REF) and any(b in text for b in _HOLDING_STATUS)
+
+
+# 提交风险问卷作答（如 "A B C C B D" / "1.A 2.B 3.C"）：整句只含选项字母、题号和分隔符。
+# 这类消息命中不了任何关键词，不单独识别会被兜底到 education，导致测评无法完成。
+_ANSWER_SHEET = re.compile(r"^[\sA-Da-d0-9.,，、。:：;；()（）\-]+$")
+
+
+def is_assessment_answers(text: str) -> bool:
+    t = text.strip()
+    return bool(_ANSWER_SHEET.match(t)) and len(re.findall(r"[A-Da-d]", t)) >= 3
 
 _KEYWORDS = {
     # 在对话中更新「我的理财数据」（写入私有资料）——需具体指向"我的资料/持仓/理财数据"，或明确的"记录/保存"指令
@@ -138,6 +153,9 @@ async def llm_classify_intent(query: str) -> str:
 
 async def router_node(state: AgentState) -> dict:
     last = last_human(state)
+
+    if is_assessment_answers(last):
+        return {"intent": "assessment", "intents": ["assessment"]}
 
     # "查我自己持仓的现状/收益" → 持仓查询节点（读【我的理财数据】按代码查实时收益）
     # 放在最前：要盖过 recommend 的"我的持仓/我目前"等泛化词（那些是给建议、这里是查现状）

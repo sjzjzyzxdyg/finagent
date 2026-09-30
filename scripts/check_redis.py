@@ -1,4 +1,4 @@
-"""本机验证 Redis 记忆（checkpointer）+ 语义缓存。
+"""本机验证 Redis 记忆（checkpointer）+ 答案缓存（精确匹配）。
 
 前置：docker compose up -d 已起 redis-stack-server（含 RediSearch），.env 配置：
     REDIS_URL=redis://localhost:6379/0
@@ -37,13 +37,14 @@ async def main() -> None:
     n = len(state.values.get("messages", []))
     print(f"同一会话累计消息数：{n}（>=4 说明多轮记忆已持久化到 Redis）")
 
-    # 2) 语义缓存（仅教育类答案会被缓存）
+    # 2) 精确匹配缓存（仅教育类答案会被缓存；问题规范化后完全相同才命中）
     cache = get_cache()
     await cache.aset("什么是定投", {"answer": "定投是每隔固定时间投入固定金额……", "agent_type": "education_agent", "sources": []})
-    hit = await cache.aget("定投到底是什么意思呢")  # 相近问法
-    print(f"语义缓存命中：{bool(hit)}" + (f"（相似度 {hit['_score']}）" if hit else ""))
+    same = await cache.aget("  什么是定投 ")          # 仅空白不同 → 应命中
+    other = await cache.aget("定投到底是什么意思呢")  # 不同问法 → 不命中
+    print(f"相同问题命中：{bool(same)}；不同问法命中：{bool(other)}")
 
-    print("\n✅ Redis 记忆 + 语义缓存验证完成。")
+    print("\n✅ Redis 记忆 + 答案缓存验证完成。")
 
 
 if __name__ == "__main__":

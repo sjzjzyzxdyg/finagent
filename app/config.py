@@ -1,7 +1,7 @@
 """全局配置：基于 pydantic-settings，从环境变量 / .env 读取。
 
-设计原则：所有外部依赖都可缺省。缺省时项目进入 mock 模式
-（内存 LLM、SQLite、内存向量库、内存 checkpointer、内置知识库播种），实现零配置启动。
+设计原则：数据类依赖可缺省并自动降级（SQLite、内存 checkpointer、不缓存、不取实时数据）。
+大模型例外：未配置 OPENAI_API_KEY 时进入 mock 模式，仅供离线测试，运行服务时拒绝启动。
 """
 from functools import lru_cache
 

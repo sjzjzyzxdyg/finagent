@@ -524,7 +524,7 @@ function addMeta(el, agent, sources, cached, thinkTime) {
   msgs.scrollTop = msgs.scrollHeight;
 }
 
-// ---------- 反馈（点赞/点踩，点踩带补充会自动补进知识库）----------
+// ---------- 反馈（点赞/点踩满意度）----------
 function attachFeedback(el, ctx) {
   const bar = document.createElement("div"); bar.className = "fb";
   const up = document.createElement("button"); up.className = "fbbtn"; up.textContent = "👍";
