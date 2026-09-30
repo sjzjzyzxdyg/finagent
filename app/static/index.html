@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>小白理财智能助手</title>
+<style>
+  :root {
+    /* 经典金融配色：浅色底 + 可信赖蓝为主 + 金/绿点缀 */
+    --bg: #eef2f8; --panel: #ffffff; --panel2: #f6f8fc; --line: #e2e8f0;
+    --text: #1e293b; --muted: #64748b; --accent: #2563eb; --accent2: #16a34a;
+    --gold: #c99a3b; --user: #e6efff; --bot: #ffffff; --warn: #d97706;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    font-size: 13.5px;   /* 整体字号收小一点（原为浏览器默认 16px），聊天正文随之变小 */
+    background: var(--bg); color: var(--text); height: 100vh; display: flex; }
+
+  .sidebar { width: 300px; flex: 0 0 auto; background: var(--panel); border-right: 1px solid var(--line);
+    border-top: 3px solid var(--accent);
+    padding: 18px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+  .sidebar.collapsed { display: none; }
+  /* 拖拽改宽度的手柄 */
+  .resizer { flex: 0 0 5px; cursor: col-resize; background: var(--line); }
+  .resizer:hover, .resizer.dragging { background: var(--accent); }
+  /* 收起后左上角的重新展开按钮 */
+  .sidebar-reopen { position: absolute; top: 10px; left: 10px; z-index: 20;
+    padding: 5px 10px; font-size: 13px; border-radius: 8px; }
+  .brand { font-size: 18px; font-weight: 700; color: var(--accent);
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .brand .collapse-btn { background: transparent; color: var(--muted); border: 1px solid var(--line);
+    padding: 2px 8px; font-size: 13px; font-weight: 700; border-radius: 6px; flex: 0 0 auto; }
+  .brand .collapse-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .brand .brand-title { flex: 1; }
+  .brand small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; margin-top: 4px; }
+  .card { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .card h3 { margin: 0 0 8px; font-size: 13px; color: var(--muted); font-weight: 600; }
+  .collap-head { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
+  .collap-head h3 { margin: 0; }
+  .collap-head:hover h3 { color: var(--accent); }
+  .chev { color: var(--muted); font-size: 12px; }
+  .collap-body { margin-top: 10px; }
+  input, textarea, button { font-family: inherit; font-size: 13px; }
+  input, textarea { width: 100%; background: var(--bg); border: 1px solid var(--line);
+    color: var(--text); border-radius: 8px; padding: 8px; outline: none; }
+  input:focus, textarea:focus { border-color: var(--accent); }
+  button { cursor: pointer; border: none; border-radius: 8px; padding: 8px 12px;
+    background: var(--accent); color: #fff; font-weight: 700; }
+  button:hover { filter: brightness(1.06); }
+  button.ghost { background: transparent; border: 1px solid var(--line); color: var(--text); }
+  button.small { padding: 5px 10px; font-size: 12px; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .row { display: flex; gap: 8px; }
+  .status { font-size: 12px; color: var(--muted); line-height: 1.7; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .dot.on { background: var(--accent2); } .dot.off { background: #cbd5e1; }
+
+  /* 会话历史列表 */
+  .sesslist { display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow-y: auto; }
+  .sess { display: flex; flex-direction: column; gap: 2px; padding: 7px 9px; border-radius: 8px;
+    cursor: pointer; border: 1px solid transparent; }
+  .sess:hover { background: var(--bg); }
+  .sess.active { background: var(--user); border-color: var(--accent); }
+  .sess-t { font-size: 12.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sess-d { font-size: 10.5px; color: var(--muted); }
+  .newchat { width: 100%; margin-bottom: 8px; background: var(--panel); color: var(--accent);
+    border: 1px solid var(--accent); font-weight: 700; }
+  .newchat:hover { background: var(--user); filter: none; }
+
+  .main { flex: 1; display: flex; flex-direction: column; position: relative; }
+  .messages { flex: 1; min-width: 0; overflow-y: auto; overflow-x: hidden; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .msg { max-width: 760px; min-width: 0; padding: 12px 16px; border-radius: 12px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; }
+  .msg.user { align-self: flex-end; background: var(--user); border-bottom-right-radius: 4px; }
+  .msg.bot { align-self: flex-start; background: var(--bot); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+  .msg.thinking { color: var(--muted); font-style: italic; animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+  /* 渲染后的 Markdown（机器人回答有层次） */
+  .msg .md { white-space: normal; }
+  .msg .md > :first-child { margin-top: 0; }
+  .msg .md > :last-child { margin-bottom: 0; }
+  .msg .md h1, .msg .md h2, .msg .md h3, .msg .md h4 { margin: 14px 0 6px; line-height: 1.3; }
+  .msg .md h1 { font-size: 18px; }
+  .msg .md h2 { font-size: 16px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+  .msg .md h3 { font-size: 14.5px; color: var(--accent); }
+  .msg .md h4 { font-size: 13.5px; color: var(--muted); }
+  .msg .md p { margin: 6px 0; }
+  .msg .md ul, .msg .md ol { margin: 6px 0; padding-left: 22px; }
+  .msg .md li { margin: 3px 0; }
+  .msg .md strong { font-weight: 700; }
+  .msg .md a { color: var(--accent); text-decoration: underline; word-break: break-all; }
+  .msg .md code { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; font-size: 12px; font-family: ui-monospace, Menlo, monospace; }
+  .msg .md hr { border: none; border-top: 1px solid var(--line); margin: 10px 0; }
+  /* 表格放进可左右滑动的容器，气泡宽度不被撑破（手机端尤其重要） */
+  .msg .md .tablewrap { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 8px 0; }
+  .msg .md table { border-collapse: collapse; font-size: 12.5px; width: auto; max-width: none; }
+  .msg .md th, .msg .md td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
+  .msg .md thead th { background: var(--panel2); font-weight: 700; white-space: nowrap; }
+  .msg .md tbody tr:nth-child(even) td { background: #fafbfe; }
+  .meta { font-size: 11px; color: var(--muted); margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .badge { background: #e6efff; color: #1d4ed8; padding: 2px 8px; border-radius: 20px; font-size: 11px; }
+  .badge.cache { background: #dcfce7; color: #15803d; }
+  .src { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+  /* 反馈（点赞/点踩） */
+  .fb { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+  .fbbtn { background: transparent; border: 1px solid var(--line); color: var(--muted);
+    border-radius: 8px; padding: 2px 8px; font-size: 13px; font-weight: 400; }
+  .fbbtn:hover { border-color: var(--accent); color: var(--accent); }
+  .fbbtn.active { border-color: var(--accent); color: var(--accent); background: var(--user); }
+  .fbtip { font-size: 11px; color: var(--accent2); }
+  .fbbox { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; max-width: 520px; }
+  .fbbox textarea { width: 100%; background: var(--panel); border: 1px solid var(--line);
+    color: var(--text); border-radius: 8px; padding: 8px; font-size: 13px; resize: vertical; }
+  .fbbox .fbsend { align-self: flex-start; padding: 5px 12px; font-size: 12px; }
+
+  .composer { border-top: 1px solid var(--line); padding: 16px 24px; display: flex; gap: 12px; background: var(--panel); }
+  .composer textarea { flex: 1; resize: none; height: 46px; max-height: 160px; }
+  .composer button { padding: 0 22px; }
+  .hint { padding: 6px 24px; font-size: 11px; color: var(--muted); background: var(--panel); }
+  .empty { color: var(--muted); text-align: center; margin: auto; }
+
+  /* [hidden] 必须真正隐藏（否则被 .line/.authform 的 display 覆盖） */
+  [hidden] { display: none !important; }
+
+  /* 登录组件：固定在侧栏底部，非悬浮 */
+  .authcard { margin-top: auto; }
+  .authcard .who { font-size: 13px; }
+  .authcard .who b { color: var(--accent2); }
+  .authcard .line { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+  .authcard .authform { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .authcard .tip { font-size: 11px; color: var(--muted); min-height: 14px; }
+  .authcard .statedot { font-size: 12px; color: var(--muted); }
+
+  /* 手机抽屉打开时的半透明遮罩 */
+  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 40; }
+
+  /* ============ 手机适配（窄屏）：侧栏变可滑出的抽屉，聊天占满 ============ */
+  @media (max-width: 760px) {
+    body { font-size: 14px; }
+    .sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0;
+      width: 84vw; max-width: 320px;
+      z-index: 50; box-shadow: 2px 0 16px rgba(0,0,0,.25);
+      transition: transform .22s ease;
+    }
+    /* 手机上"收起"= 滑出屏幕（而非桌面的 display:none），才有滑动动画 */
+    .sidebar.collapsed { display: flex; transform: translateX(-110%); box-shadow: none; }
+    .resizer { display: none; }
+    .messages { padding: 14px 12px; gap: 12px; }
+    .msg { max-width: 100%; }
+    .composer { padding: 10px 12px; gap: 8px; }
+    .composer button { padding: 0 16px; }
+    .hint { padding: 6px 12px; }
+    .sidebar-reopen { top: 8px; left: 8px; }
+  }
+</style>
+</head>
+<body>
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <span class="brand-title">小白理财助手
+        <small>学知识 · 看产品 · 测风险 · 挑产品</small>
+      </span>
+      <button class="collapse-btn" onclick="toggleSidebar()" title="收起侧栏">«</button>
+    </div>
+
+    <div class="card">
+      <h3>系统状态</h3>
+      <div class="status" id="status">加载中…</div>
+    </div>
+
+    <!-- 会话历史（按登录用户隔离；未登录时为本机匿名历史） -->
+    <div class="card">
+      <h3>💬 会话历史</h3>
+      <button class="small newchat" onclick="newChat()">＋ 新对话</button>
+      <div class="sesslist" id="sessList"><div class="status">加载中…</div></div>
+    </div>
+
+
+    <div class="card">
+      <h3>试试这些问题</h3>
+      <div class="status">
+        · 什么是 ETF？和主动基金啥区别<br>
+        · 我有10万定期、每月能投3000（说说你的情况，我会记住）<br>
+        · 有哪些 R2 以内的稳健产品<br>
+        · 帮我做个风险测评<br>
+        · 帮我推荐一个配置方案
+      </div>
+    </div>
+
+    <!-- 登录组件（侧栏底部，非悬浮）：已登录 / 未登录 两种状态 -->
+    <div class="card authcard" id="authbox">
+      <!-- 已登录状态 -->
+      <div class="line" id="authLogged" hidden>
+        <span class="who">👤 已登录：<b id="whoName">—</b></span>
+        <button class="ghost small" onclick="logout()">退出</button>
+      </div>
+      <!-- 未登录状态 -->
+      <div id="authGuest">
+        <div class="line">
+          <span class="statedot"><span class="dot off"></span>未登录</span>
+          <button class="small" id="authToggle" onclick="toggleAuthForm()">登录</button>
+        </div>
+        <div class="authform" id="authForm" hidden>
+          <input id="username" placeholder="用户名（≥2位）" />
+          <input id="password" type="password" placeholder="密码（≥6位）" />
+          <div class="row" style="gap:6px">
+            <button class="small" onclick="login()">登录</button>
+            <button class="small ghost" onclick="registerUser()">注册</button>
+          </div>
+          <div class="tip" id="loginState"></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="resizer" id="resizer" title="拖动调整侧栏宽度"></div>
+
+  <main class="main">
+    <button class="small sidebar-reopen" id="sidebarReopen" onclick="toggleSidebar()" hidden>☰ 菜单</button>
+    <div class="messages" id="messages">
+      <div class="empty">输入问题开始对话 👇</div>
+    </div>
+    <div class="composer">
+      <textarea id="input" placeholder="问点什么…（Enter 发送，Shift+Enter 换行）"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send();}"></textarea>
+      <button id="sendBtn" onclick="send()">发送</button>
+    </div>
+    <div class="hint" id="hint">会话 ID：<span id="sid"></span></div>
+  </main>
+  <div class="backdrop" id="backdrop" hidden onclick="closeSidebarMobile()"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const msgs = $("messages");
+
+// 当前会话 id：优先沿用上次（localStorage），否则新开一个。
+function newSessionId() { return "web-" + Math.random().toString(36).slice(2, 10); }
+let currentSession = (() => { try { return localStorage.getItem("pf_session"); } catch (e) { return null; } })()
+  || newSessionId();
+let token = "";
+let authEnabled = false;
+
+function setSession(id) {
+  currentSession = id;
+  $("sid").textContent = id;
+  try { localStorage.setItem("pf_session", id); } catch (e) {}
+}
+setSession(currentSession);
+
+const escapeHtml = (t) => (t || "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function fmtTime(iso) {
+  if (!iso) return "";
+  // 后端存的是不带时区标记的 UTC 时间，补个 Z 让浏览器按本地时区换算显示
+  if (!/[Z+]|[+-]\d\d:?\d\d$/.test(iso)) iso += "Z";
+  const d = new Date(iso), now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  const pad = (n) => String(n).padStart(2, "0");
+  return sameDay ? `${pad(d.getHours())}:${pad(d.getMinutes())}`
+                 : `${d.getMonth() + 1}月${d.getDate()}日`;
+}
+
+// ---------- 侧栏：电脑=可拖拽两栏；手机=可滑出的抽屉。状态记到 localStorage ----------
+const SIDEBAR_MIN = 200, SIDEBAR_MAX = 560;
+const isMobile = () => window.matchMedia("(max-width: 760px)").matches;
+
+function _applySidebar(collapsed) {
+  const sb = $("sidebar");
+  sb.classList.toggle("collapsed", collapsed);
+  $("resizer").hidden = collapsed || isMobile();
+  $("sidebarReopen").hidden = !collapsed;
+  $("backdrop").hidden = !(isMobile() && !collapsed);   // 手机抽屉打开时才有遮罩
+}
+function toggleSidebar() {
+  const collapsed = !$("sidebar").classList.contains("collapsed");
+  _applySidebar(collapsed);
+  try { localStorage.setItem("pf_sidebar_collapsed", collapsed ? "1" : "0"); } catch (e) {}
+}
+function closeSidebarMobile() { _applySidebar(true); }   // 点遮罩关抽屉
+
+(function initSidebar() {
+  const sb = $("sidebar"), rz = $("resizer");
+  let collapsed;
+  if (isMobile()) {
+    collapsed = true;          // 手机默认收起（抽屉关闭），宽度交给 CSS，不用内联像素
+    sb.style.width = "";
+  } else {
+    try {
+      const w = parseInt(localStorage.getItem("pf_sidebar_w") || "", 10);
+      if (w >= SIDEBAR_MIN && w <= SIDEBAR_MAX) sb.style.width = w + "px";
+      collapsed = localStorage.getItem("pf_sidebar_collapsed") === "1";
+    } catch (e) { collapsed = false; }
+  }
+  _applySidebar(collapsed);
+
+  // 拖拽改宽度（仅电脑）
+  let dragging = false;
+  rz.addEventListener("mousedown", (e) => {
+    if (isMobile()) return;
+    dragging = true; rz.classList.add("dragging");
+    document.body.style.userSelect = "none"; document.body.style.cursor = "col-resize";
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!dragging) return;
+    sb.style.width = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, e.clientX)) + "px";
+  });
+  window.addEventListener("mouseup", () => {
+    if (!dragging) return;
+    dragging = false; rz.classList.remove("dragging");
+    document.body.style.userSelect = ""; document.body.style.cursor = "";
+    try { localStorage.setItem("pf_sidebar_w", parseInt(sb.style.width, 10) || 300); } catch (e) {}
+  });
+  // 窗口尺寸/横竖屏切换：重新按当前设备形态摆正
+  window.addEventListener("resize", () => {
+    if (isMobile()) sb.style.width = "";
+    _applySidebar(sb.classList.contains("collapsed"));
+  });
+})();
+
+async function loadStatus() {
+  try {
+    const r = await fetch("/health");
+    const h = await r.json();
+    authEnabled = h.auth_enabled;
+    $("status").innerHTML =
+      `<span class="dot ${h.llm_mode==='live'?'on':'off'}"></span>大模型：${h.llm_mode}<br>` +
+      `<span class="dot ${h.live_data?'on':'off'}"></span>联网取数：${h.live_data?'开启':'关闭(用示例库)'}<br>` +
+      `<span class="dot ${h.redis?'on':'off'}"></span>Redis：${h.redis?'已连':'内存'}<br>` +
+      `<span class="dot ${h.auth_enabled?'on':'off'}"></span>鉴权：${h.auth_enabled?'开启':'关闭'}`;
+  } catch (e) { $("status").textContent = "无法连接后端"; }
+}
+loadStatus();
+
+// ---------- 会话历史（按登录用户） ----------
+function clearMessages(placeholder) {
+  msgs.innerHTML = `<div class="empty">${placeholder || "输入问题开始对话 👇"}</div>`;
+}
+function highlightActive() {
+  document.querySelectorAll(".sess").forEach(e =>
+    e.classList.toggle("active", e.dataset.sid === currentSession));
+}
+function renderSessionList(list) {
+  const box = $("sessList");
+  if (!list || !list.length) { box.innerHTML = '<div class="status">还没有历史对话</div>'; return; }
+  box.innerHTML = "";
+  list.forEach(s => {
+    const it = document.createElement("div");
+    it.className = "sess";
+    it.dataset.sid = s.session_id;
+    it.innerHTML = `<span class="sess-t">${escapeHtml(s.title)}</span><span class="sess-d">${fmtTime(s.updated_at)}</span>`;
+    it.onclick = () => loadSession(s.session_id);
+    box.appendChild(it);
+  });
+  highlightActive();
+}
+async function loadSessions(autoOpen = false) {
+  const box = $("sessList");
+  try {
+    const r = await fetch("/api/chat/sessions", { headers: authHeaders() });
+    if (r.status === 401) { box.innerHTML = '<div class="status">登录后查看历史对话（用侧栏的登录框）</div>'; return; }
+    if (!r.ok) { box.innerHTML = '<div class="status">历史加载失败</div>'; return; }
+    const list = await r.json();
+    renderSessionList(list);
+    if (autoOpen && list.length) {
+      // 优先恢复上次那次会话；找不到就打开最近一次
+      const pick = list.find(s => s.session_id === currentSession) || list[0];
+      await loadSession(pick.session_id);
+    }
+  } catch (e) { box.innerHTML = '<div class="status">无法连接后端</div>'; }
+}
+async function loadSession(id) {
+  try {
+    const r = await fetch("/api/chat/history/" + encodeURIComponent(id), { headers: authHeaders() });
+    if (!r.ok) return;
+    const rows = await r.json();
+    setSession(id);
+    if (isMobile()) closeSidebarMobile();   // 手机上选了会话就收起抽屉，露出聊天
+    msgs.innerHTML = "";
+    if (!rows.length) { clearMessages("（空会话）"); highlightActive(); return; }
+    let lastUserQ = "";
+    for (const m of rows) {
+      if (m.role === "user") { lastUserQ = m.content; addMsg("user", m.content); }
+      else if (m.role === "assistant") {
+        const bot = addMsg("bot", "");
+        renderBotMarkdown(bot, m.content || "");
+        addMeta(bot, m.agent_type, m.sources, false);
+        attachFeedback(bot, { question: lastUserQ, answer: m.content || "", agent_type: m.agent_type });
+      }
+    }
+    highlightActive();
+    msgs.scrollTop = msgs.scrollHeight;
+  } catch (e) {}
+}
+function newChat() {
+  setSession(newSessionId());
+  clearMessages();
+  highlightActive();
+  if (isMobile()) closeSidebarMobile();   // 手机上开新对话即收起抽屉
+  $("input").focus();
+}
+loadSessions(true);   // 首屏：拉历史，并自动打开上次/最近一次会话
+
+// ---------- 侧栏登录组件 ----------
+function toggleAuthForm() {
+  const f = $("authForm");
+  f.hidden = !f.hidden;
+  $("authToggle").textContent = f.hidden ? "登录" : "收起";
+}
+function setLoggedIn(name) {
+  $("whoName").textContent = name;
+  $("authLogged").hidden = false;
+  $("authGuest").hidden = true;
+}
+function setLoggedOut() {
+  token = "";
+  $("authLogged").hidden = true;
+  $("authGuest").hidden = false;
+  $("authForm").hidden = true;
+  $("authToggle").textContent = "登录";
+  $("loginState").textContent = "";
+}
+function authHeaders(extra = {}) {
+  return token ? { ...extra, Authorization: "Bearer " + token } : extra;
+}
+async function login() {
+  const body = new URLSearchParams({ username: $("username").value, password: $("password").value });
+  try {
+    const r = await fetch("/api/auth/token", { method: "POST", body });
+    if (r.ok) {
+      token = (await r.json()).access_token;
+      setLoggedIn($("username").value || "用户");
+      loadSessions(true);   // 登录后拉取「我的」历史并打开最近一次
+    } else {
+      $("loginState").textContent = "❌ 用户名或密码错误";
+    }
+  } catch (e) { $("loginState").textContent = "❌ 无法连接后端"; }
+}
+async function registerUser() {
+  const u = $("username").value.trim(), p = $("password").value;
+  if (u.length < 2 || p.length < 6) { $("loginState").textContent = "用户名≥2位、密码≥6位"; return; }
+  const body = new URLSearchParams({ username: u, password: p });
+  try {
+    const r = await fetch("/api/auth/register", { method: "POST", body });
+    if (r.ok) { token = (await r.json()).access_token; setLoggedIn(u); loadSessions(true); }
+    else if (r.status === 409) { $("loginState").textContent = "❌ 用户名已存在"; }
+    else { const d = await r.json().catch(() => ({})); $("loginState").textContent = "❌ " + (d.detail || "注册失败"); }
+  } catch (e) { $("loginState").textContent = "❌ 无法连接后端"; }
+}
+function logout() { setLoggedOut(); newChat(); loadSessions(); }
+
+// 「我的理财数据」已改为聊天中自动记录（后端被动捕捉），不再需要手动卡片。
+
+// ---------- 轻量 Markdown 渲染（标题/加粗/列表/表格/代码，先转义防 XSS）----------
+function mdInline(s) {
+  s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+  return s;
+}
+function renderMarkdown(md) {
+  const esc = (t) => t.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const lines = esc(md || "").replace(/\r\n/g, "\n").split("\n");
+  const isSep = (l) => /^\s*\|?[-:\s|]+\|?\s*$/.test(l) && l.includes("-");
+  const isBlockStart = (l, j) =>
+    /^\s*(#{1,6})\s+/.test(l) || /^\s*[-*+]\s+/.test(l) || /^\s*\d+\.\s+/.test(l) ||
+    (l.includes("|") && j + 1 < lines.length && isSep(lines[j + 1]));
+  let html = "", i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (/^\s*$/.test(line)) { i++; continue; }
+    const h = line.match(/^\s*(#{1,6})\s+(.*)$/);
+    if (h) { const lv = Math.min(h[1].length, 4); html += `<h${lv}>${mdInline(h[2].trim())}</h${lv}>`; i++; continue; }
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { html += "<hr>"; i++; continue; }
+    // 表格
+    if (line.includes("|") && i + 1 < lines.length && isSep(lines[i + 1])) {
+      const cells = (l) => l.trim().replace(/^\||\|$/g, "").split("|").map(c => mdInline(c.trim()));
+      const header = cells(line); i += 2; const rows = [];
+      while (i < lines.length && lines[i].includes("|") && !/^\s*$/.test(lines[i])) { rows.push(cells(lines[i])); i++; }
+      html += '<div class="tablewrap"><table><thead><tr>' + header.map(c => `<th>${c}</th>`).join("") +
+        "</tr></thead><tbody>" + rows.map(r => "<tr>" + r.map(c => `<td>${c}</td>`).join("") + "</tr>").join("") +
+        "</tbody></table></div>";
+      continue;
+    }
+    if (/^\s*[-*+]\s+/.test(line)) {
+      let items = "";
+      while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) { items += `<li>${mdInline(lines[i].replace(/^\s*[-*+]\s+/, "").trim())}</li>`; i++; }
+      html += `<ul>${items}</ul>`; continue;
+    }
+    if (/^\s*\d+\.\s+/.test(line)) {
+      let items = "";
+      while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) { items += `<li>${mdInline(lines[i].replace(/^\s*\d+\.\s+/, "").trim())}</li>`; i++; }
+      html += `<ol>${items}</ol>`; continue;
+    }
+    const para = [];
+    while (i < lines.length && !/^\s*$/.test(lines[i]) && !isBlockStart(lines[i], i)) { para.push(lines[i]); i++; }
+    html += `<p>${para.map(l => mdInline(l.trim())).join("<br>")}</p>`;
+  }
+  return html;
+}
+function renderBotMarkdown(el, raw) {
+  el.innerHTML = `<div class="md">${renderMarkdown(raw)}</div>`;
+}
+
+// ---------- 消息渲染 ----------
+function addMsg(role, text) {
+  if (msgs.querySelector(".empty")) msgs.innerHTML = "";
+  const el = document.createElement("div");
+  el.className = "msg " + role;
+  el.textContent = text;
+  msgs.appendChild(el);
+  msgs.scrollTop = msgs.scrollHeight;
+  return el;
+}
+function addMeta(el, agent, sources, cached, thinkTime) {
+  const m = document.createElement("div");
+  m.className = "meta";
+  let html = `<span class="badge">${agent || "?"}</span>`;
+  if (thinkTime) html += `<span class="badge" title="思考用时">🕐 思考 ${thinkTime}</span>`;
+  if (cached) html += `<span class="badge cache">缓存命中</span>`;
+  if (sources && sources.length)
+    html += sources.map(s => `<span class="src">📚 ${s.title || "知识条目"} · 相关度 ${(s.score ?? 0).toFixed?.(2) ?? s.score}</span>`).join("");
+  m.innerHTML = html;
+  el.appendChild(m);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+// ---------- 反馈（点赞/点踩，点踩带补充会自动补进知识库）----------
+function attachFeedback(el, ctx) {
+  const bar = document.createElement("div"); bar.className = "fb";
+  const up = document.createElement("button"); up.className = "fbbtn"; up.textContent = "👍";
+  const down = document.createElement("button"); down.className = "fbbtn"; down.textContent = "👎";
+  const tip = document.createElement("span"); tip.className = "fbtip";
+  bar.append(up, down, tip);
+  el.append(bar);
+
+  let done = false;
+  async function post(rating) {
+    if (done) return;
+    done = true;
+    up.disabled = down.disabled = true;
+    (rating === "up" ? up : down).classList.add("active");
+    tip.textContent = rating === "up" ? "✓ 感谢反馈" : "✓ 已记录";
+    try {
+      await fetch("/api/feedback", {
+        method: "POST", headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ session_id: currentSession, rating, comment: "",
+          question: ctx.question, answer: ctx.answer, agent_type: ctx.agent_type }),
+      });
+    } catch (e) { tip.textContent = "反馈提交失败"; }
+  }
+  up.onclick = () => post("up");
+  down.onclick = () => post("down");
+}
+
+// ---------- 发送（流式）----------
+async function send() {
+  const input = $("input");
+  const query = input.value.trim();
+  if (!query) return;
+  input.value = "";
+  $("sendBtn").disabled = true;
+  addMsg("user", query);
+
+  let drainTimer = null, thinkTimer = null;   // 定时器句柄（异常时在 finally 清理）
+  try {
+    const r = await fetch("/api/chat/stream", {
+      method: "POST", headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ session_id: currentSession, query }),
+    });
+    if (r.status === 401) { addMsg("bot", "⚠️ 需要先登录（用侧栏的登录框）。"); return; }
+
+    const bot = addMsg("bot", "");
+    bot.classList.add("thinking");
+    const thinkStart = Date.now();
+    bot.textContent = "正在思考… 0.0s";
+    thinkTimer = setInterval(() => {   // 实时显示思考用时，直到第一个字到达
+      bot.textContent = `正在思考… ${((Date.now() - thinkStart) / 1000).toFixed(1)}s`;
+    }, 100);
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "", meta = null;
+
+    // 打字机：网络到达的 token 先进 pending 队列，再由定时器匀速吐字。
+    // 这样无论后端是逐字流、还是一次性整段返回，用户看到的都是平滑的逐字生成。
+    let pending = "", shown = "", started = false, streamDone = false, thoughtFor = "";
+    const stopThinking = () => {
+      if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null; }
+      if (!thoughtFor) thoughtFor = ((Date.now() - thinkStart) / 1000).toFixed(1) + "s";
+    };
+    const drainDone = new Promise((resolve) => {
+      drainTimer = setInterval(() => {
+        if (pending.length) {
+          if (!started) { stopThinking(); bot.textContent = ""; bot.classList.remove("thinking"); started = true; }
+          const n = Math.min(pending.length, Math.max(2, Math.ceil(pending.length / 25)));  // 自适应：积压多则加速
+          shown += pending.slice(0, n);
+          pending = pending.slice(n);
+          bot.textContent = shown;
+          msgs.scrollTop = msgs.scrollHeight;
+        } else if (streamDone) {
+          clearInterval(drainTimer); drainTimer = null; resolve();
+        }
+      }, 16);
+    });
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+      const blocks = buffer.split("\n\n");
+      buffer = blocks.pop();
+      for (const block of blocks) {
+        let ev = "message", data = "";
+        for (const line of block.split("\n")) {
+          if (line.startsWith("event:")) ev = line.slice(6).trim();
+          else if (line.startsWith("data:")) data += line.slice(5).trim();
+        }
+        if (ev === "token") { let t = data; try { t = JSON.parse(data); } catch {} pending += t; }
+        else if (ev === "meta") { try { meta = JSON.parse(data); } catch {} }
+        else if (ev === "error") { try { pending += "（" + (JSON.parse(data).message || "出错") + "）"; } catch {} }
+      }
+    }
+    streamDone = true;
+    await drainDone;   // 等打字机把剩余字符吐完，再做最终排版
+
+    if (meta) {
+      const answerText = meta.answer || shown || "(无内容)";
+      renderBotMarkdown(bot, answerText);   // 收尾按 Markdown 渲染成有层次的排版
+      addMeta(bot, meta.agent_type, meta.sources, meta.cached, thoughtFor);
+      attachFeedback(bot, { question: query, answer: answerText, agent_type: meta.agent_type });
+    } else if (shown) {
+      renderBotMarkdown(bot, shown);
+    }
+  } catch (e) {
+    addMsg("bot", "❌ 请求出错：" + e.message);
+  } finally {
+    if (drainTimer) { clearInterval(drainTimer); drainTimer = null; }  // 异常兜底：停掉定时器
+    if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null; }
+    $("sendBtn").disabled = false;
+    $("input").focus();
+    loadSessions();   // 刷新历史列表：新会话会出现在最前，标题/时间随之更新
+  }
+}
+</script>
+</body>
+</html>

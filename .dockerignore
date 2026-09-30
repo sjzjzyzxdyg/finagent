@@ -1,0 +1,23 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.git/
+.gitignore
+.env
+.env.*
+!.env.example
+data/*.db
+data/uploads/
+.idea/
+.vscode/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+tests/
+image.png
+Claude outputs/
+_new.tgz
+_export.tgz
+*.md
+!README.md

@@ -1,0 +1,68 @@
+# 一键拉起 PyFinAgent 全栈：应用 app + 三个数据服务
+#   Postgres+pgvector（向量库）/ MySQL 8（业务库）/ Redis Stack（记忆缓存）
+# 用法：
+#   cp .env.example .env  然后填好 key    # 首次
+#   docker compose up -d --build          # 构建并启动全栈
+#   docker compose ps                     # 查看状态
+#   docker compose logs -f app            # 看应用日志
+#   docker compose down                   # 停止（保留数据卷）
+#   docker compose down -v                # 停止并清空数据
+#
+# 数据库首次启动会自动执行 sql/ 下的建表脚本（仅当数据卷为空时）。
+
+services:
+  app:
+    build: .
+    image: pyfinagent-app
+    container_name: pyfin-app
+    env_file: .env
+    environment:
+      # 容器内用【服务名】连库，覆盖 .env 里的 localhost 值
+      MYSQL_DSN: mysql+aiomysql://pyfin:pyfin@mysql:3306/pyfinagent
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    container_name: pyfin-mysql
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: pyfin
+      MYSQL_DATABASE: pyfinagent
+      MYSQL_USER: pyfin          # 专用应用账号，pyfin@'%' 可远程/TCP 连接
+      MYSQL_PASSWORD: pyfin
+    ports:
+      - "3307:3306"              # 宿主机用 3307，避开本地 3306
+    volumes:
+      - mysqldata:/var/lib/mysql
+      - ./sql/mysql_schema.sql:/docker-entrypoint-initdb.d/01_mysql.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-ppyfin"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    # Redis Stack（含 RediSearch/JSON），LangGraph 的 Redis checkpointer 依赖它
+    image: redis/redis-stack-server:latest
+    container_name: pyfin-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  mysqldata:
+  redisdata:

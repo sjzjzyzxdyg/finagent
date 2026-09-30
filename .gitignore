@@ -1,0 +1,27 @@
+# 密钥：.env 含真实 API key，绝不提交
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 本地数据 / 测试产物
+data/
+bench/results/
+
+# IDE
+.idea/
+.vscode/
+
+# 个人笔记（仅本地保留）
+框架.md
+面试速查.md
+妗嗘灦.md
+闈㈣瘯閫熸煡.md
